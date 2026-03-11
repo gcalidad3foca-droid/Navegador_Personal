@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>NAVIX</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#080a0f;--s1:#10131a;--s2:#181c26;--s3:#1e2333;
+  --accent:#3d7eff;--accent2:#00dfa2;--red:#ff3355;--gold:#f5c518;
+  --text:#eef0f8;--dim:#4a566e;--border:rgba(255,255,255,0.07);
+  --nav-h:148px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;background:var(--bg);font-family:'Syne',sans-serif;color:var(--text);}
+
+/* ── MAP ── */
+#map{position:fixed;inset:0;z-index:1;transition:bottom 0.4s cubic-bezier(.4,0,.2,1);}
+body.nav-active #map{bottom:var(--nav-h);}
+
+/* ── TOP BAR ── */
+#topbar{
+  position:fixed;top:0;left:0;right:0;z-index:400;pointer-events:none;
+  background:linear-gradient(180deg,rgba(8,10,15,0.9) 0%,transparent 100%);
+  padding:env(safe-area-inset-top,10px) 16px 20px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.logo{
+  font-weight:800;font-size:17px;letter-spacing:4px;pointer-events:all;
+  background:linear-gradient(135deg,#3d7eff 0%,#00dfa2 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+#clock{font-family:'DM Mono',monospace;font-size:11px;color:var(--dim);letter-spacing:1px;}
+
+/* ── PREMIUM NAV ARROW MARKER ── */
+.nav-arrow-marker{
+  filter:drop-shadow(0 0 12px rgba(61,126,255,0.8)) drop-shadow(0 0 4px rgba(0,223,162,0.5));
+  transition:transform 0.4s cubic-bezier(.4,0,.2,1);
+}
+
+/* ── FLOATING PILL ── */
+#pill{
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%);
+  z-index:500;background:var(--s1);
+  border:1px solid rgba(61,126,255,0.3);border-radius:60px;
+  padding:12px 20px 12px 14px;
+  display:flex;align-items:center;gap:12px;
+  box-shadow:0 8px 48px rgba(0,0,0,0.7),0 0 0 1px rgba(61,126,255,0.1);
+  cursor:pointer;transition:all 0.25s;backdrop-filter:blur(24px);
+  min-width:230px;
+}
+#pill:active{transform:translateX(-50%) scale(0.97);}
+#pill.gone{opacity:0;pointer-events:none;transform:translateX(-50%) translateY(30px);}
+.pill-ico{
+  width:34px;height:34px;border-radius:50%;
+  background:linear-gradient(135deg,rgba(61,126,255,0.2),rgba(0,223,162,0.1));
+  border:1px solid rgba(61,126,255,0.35);
+  display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;
+}
+.pill-txt{flex:1;}
+.pill-main{font-size:13px;font-weight:700;}
+.pill-sub{font-size:10px;color:var(--dim);font-family:'DM Mono',monospace;margin-top:1px;}
+.pill-chev{color:var(--accent);font-size:16px;font-weight:700;}
+
+/* ── MAP SIDE CONTROLS ── */
+#side-ctrl{
+  position:fixed;right:14px;z-index:400;
+  display:flex;flex-direction:column;gap:8px;
+  bottom:36px;transition:bottom 0.4s;
+}
+body.nav-active #side-ctrl{bottom:calc(var(--nav-h) + 16px);}
+.sctl{
+  width:44px;height:44px;border-radius:14px;
+  background:rgba(16,19,26,0.92);border:1px solid var(--border);
+  color:var(--text);font-size:18px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 20px rgba(0,0,0,0.5);backdrop-filter:blur(16px);
+  transition:all 0.2s;
+}
+.sctl:active{transform:scale(0.92);}
+.sctl.lit{background:rgba(61,126,255,0.18);border-color:rgba(61,126,255,0.5);color:var(--accent);}
+
+/* Center / lock btn */
+#lock-btn{
+  position:fixed;left:14px;z-index:400;
+  width:44px;height:44px;border-radius:14px;
+  background:rgba(16,19,26,0.92);border:1px solid var(--border);
+  color:var(--text);font-size:20px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 20px rgba(0,0,0,0.5);backdrop-filter:blur(16px);
+  transition:all 0.2s;bottom:36px;
+}
+body.nav-active #lock-btn{bottom:calc(var(--nav-h) + 16px);}
+#lock-btn.locked{background:rgba(0,223,162,0.15);border-color:rgba(0,223,162,0.4);color:var(--accent2);}
+#lock-btn:active{transform:scale(0.92);}
+
+/* Speed pill */
+#spd{
+  position:fixed;left:14px;z-index:400;
+  background:rgba(16,19,26,0.92);border:1.5px solid var(--border);
+  border-radius:14px;padding:8px 12px;text-align:center;
+  display:none;backdrop-filter:blur(16px);
+  box-shadow:0 4px 20px rgba(0,0,0,0.4);
+  bottom:calc(var(--nav-h) + 72px);
+}
+#spd.show{display:block;}
+#spd-v{font-size:22px;font-weight:800;}
+#spd-u{font-size:9px;color:var(--dim);font-family:'DM Mono',monospace;letter-spacing:1px;}
+#spd.speeding{border-color:rgba(255,51,85,0.5);background:rgba(255,51,85,0.08);}
+#spd.speeding #spd-v{color:var(--red);}
+
+/* ── REROUTE BANNER ── */
+#reroute-banner{
+  position:fixed;top:70px;left:50%;transform:translateX(-50%);
+  z-index:600;background:rgba(245,197,24,0.95);
+  color:#000;border-radius:30px;padding:10px 22px;
+  font-size:13px;font-weight:700;letter-spacing:0.5px;
+  display:none;align-items:center;gap:8px;
+  box-shadow:0 6px 30px rgba(245,197,24,0.4);
+  animation:pulse-banner 1s ease-in-out infinite;
+}
+#reroute-banner.show{display:flex;}
+@keyframes pulse-banner{0%,100%{opacity:1}50%{opacity:0.7}}
+
+/* ── TOP NAV INSTRUCTION ── */
+#nav-top{
+  position:fixed;top:0;left:0;right:0;z-index:700;
+  display:none;padding-top:env(safe-area-inset-top,0px);
+}
+#nav-top.on{display:block;}
+.nt-card{
+  background:var(--accent);
+  border-radius:0 0 22px 22px;
+  padding:16px 20px 18px;
+  display:flex;align-items:center;gap:14px;
+  box-shadow:0 10px 40px rgba(61,126,255,0.45);
+}
+.nt-ico{font-size:38px;flex-shrink:0;filter:drop-shadow(0 0 8px rgba(0,0,0,0.3));}
+.nt-t{flex:1;min-width:0;}
+.nt-dist{font-size:32px;font-weight:800;color:#000;line-height:1;}
+.nt-act{font-size:13px;color:rgba(0,0,0,0.65);margin-top:3px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.nt-nxt{font-family:'DM Mono',monospace;font-size:10px;color:rgba(0,0,0,0.42);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* Lane indicator dots */
+.nt-lane{display:flex;gap:4px;margin-top:6px;}
+.lane-dot{width:8px;height:8px;border-radius:50%;background:rgba(0,0,0,0.2);}
+.lane-dot.active{background:#000;}
+
+/* ── BOTTOM NAV BAR ── */
+#navbar{
+  position:fixed;bottom:0;left:0;right:0;z-index:700;
+  height:var(--nav-h);background:var(--s1);
+  border-radius:24px 24px 0 0;
+  box-shadow:0 -16px 50px rgba(0,0,0,0.7),0 -1px 0 rgba(255,255,255,0.05);
+  padding:14px 20px;
+  padding-bottom:env(safe-area-inset-bottom,14px);
+  display:none;flex-direction:column;gap:10px;
+}
+#navbar.on{display:flex;}
+
+.nb-top{display:flex;align-items:center;gap:12px;}
+.nb-ico{
+  width:52px;height:52px;border-radius:16px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:28px;
+  background:linear-gradient(135deg,rgba(61,126,255,0.15),rgba(0,223,162,0.08));
+  border:1.5px solid rgba(61,126,255,0.3);
+}
+.nb-txt{flex:1;min-width:0;}
+.nb-action{font-size:17px;font-weight:800;line-height:1.25;}
+.nb-street{font-size:12px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.nb-dist{font-family:'DM Mono',monospace;font-size:15px;color:var(--accent2);font-weight:500;flex-shrink:0;}
+
+.nb-bot{display:flex;align-items:center;gap:10px;}
+.nb-stats{flex:1;display:flex;gap:0;}
+.nb-stat{
+  flex:1;display:flex;flex-direction:column;gap:1px;
+  padding:0 10px;border-right:1px solid var(--border);
+}
+.nb-stat:first-child{padding-left:0;}
+.nb-stat:last-child{border-right:none;}
+.nb-sv{font-size:15px;font-weight:800;}
+.nb-sl{font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;font-family:'DM Mono',monospace;margin-top:1px;}
+.nb-voice{
+  width:38px;height:38px;border-radius:12px;
+  background:var(--s2);border:1px solid var(--border);
+  color:var(--dim);font-size:17px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all 0.2s;
+}
+.nb-voice.on{background:rgba(61,126,255,0.12);border-color:rgba(61,126,255,0.4);color:var(--accent);}
+.nb-end{
+  padding:10px 16px;background:rgba(255,51,85,0.1);
+  border:1px solid rgba(255,51,85,0.25);border-radius:12px;
+  color:var(--red);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;
+  cursor:pointer;transition:all 0.2s;white-space:nowrap;
+}
+.nb-end:active{background:rgba(255,51,85,0.25);}
+
+/* ── NAV MODAL ── */
+#nav-modal{
+  position:fixed;inset:0;z-index:800;
+  display:flex;align-items:flex-end;
+  pointer-events:none;opacity:0;transition:opacity 0.28s;
+}
+#nav-modal.open{pointer-events:all;opacity:1;}
+.modal-bg{position:absolute;inset:0;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);}
+.modal-sheet{
+  position:relative;z-index:1;width:100%;
+  background:var(--s1);border-radius:26px 26px 0 0;
+  padding:0 0 env(safe-area-inset-bottom,16px);
+  box-shadow:0 -24px 60px rgba(0,0,0,0.8),0 -1px 0 rgba(255,255,255,0.06);
+  transform:translateY(100%);
+  transition:transform 0.35s cubic-bezier(.4,0,.2,1);
+  max-height:88vh;display:flex;flex-direction:column;
+}
+#nav-modal.open .modal-sheet{transform:translateY(0);}
+
+.sh-handle{width:38px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin:14px auto 0;}
+.sh-head{
+  padding:13px 20px 14px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.sh-title{font-size:15px;font-weight:800;display:flex;align-items:center;gap:8px;}
+.sh-close{
+  width:30px;height:30px;border-radius:50%;border:none;
+  background:var(--s2);color:var(--dim);font-size:15px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s;
+}
+.sh-close:active{background:rgba(255,51,85,0.2);color:var(--red);}
+.sh-body{padding:16px 20px;overflow-y:auto;flex:1;}
+.sh-body::-webkit-scrollbar{width:0;}
+
+/* Field */
+.fw{position:relative;margin-bottom:10px;}
+.frow{
+  display:flex;align-items:center;gap:10px;
+  background:var(--s2);border-radius:14px;padding:0 14px;
+  border:1.5px solid var(--border);transition:border-color 0.2s;
+}
+.frow:focus-within{border-color:var(--accent);}
+.fdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.fdot-o{background:var(--accent2);box-shadow:0 0 6px var(--accent2);}
+.fdot-d{background:var(--red);box-shadow:0 0 6px var(--red);}
+.fi{
+  flex:1;background:none;border:none;outline:none;
+  color:var(--text);font-family:'Syne',sans-serif;font-size:14px;padding:13px 0;
+}
+.fi::placeholder{color:var(--dim);}
+.fbtn{background:none;border:none;color:var(--dim);font-size:15px;cursor:pointer;padding:4px;transition:color 0.2s;}
+.fbtn:active{color:var(--accent);}
+
+.swap-row{display:flex;align-items:center;gap:8px;margin:2px 0 10px;}
+.swap-line{flex:1;height:1px;background:var(--border);}
+.swap-btn{background:none;border:1px solid var(--border);border-radius:20px;padding:4px 14px;color:var(--dim);font-size:11px;font-family:'Syne',sans-serif;cursor:pointer;transition:all 0.2s;}
+.swap-btn:active{border-color:var(--accent);color:var(--accent);}
+
+/* Autocomplete */
+.aclist{
+  position:absolute;top:calc(100% + 4px);left:0;right:0;
+  background:var(--s2);border:1px solid rgba(61,126,255,0.2);
+  border-radius:14px;overflow:hidden;z-index:2000;
+  box-shadow:0 16px 48px rgba(0,0,0,0.8);
+  display:none;max-height:220px;overflow-y:auto;
+}
+.aclist.open{display:block;}
+.aclist::-webkit-scrollbar{width:0;}
+.acitem{
+  padding:11px 14px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;transition:background 0.1s;
+}
+.acitem:last-child{border-bottom:none;}
+.acitem:active,.acitem.sel{background:rgba(61,126,255,0.1);}
+.aci{font-size:17px;flex-shrink:0;}
+.act{flex:1;min-width:0;}
+.acn{font-size:13px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.acs{font-size:10px;color:var(--dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.acd{font-size:11px;color:var(--accent);font-weight:700;flex-shrink:0;}
+
+/* Modes */
+.modes{display:flex;gap:7px;margin:14px 0 0;}
+.mc{
+  flex:1;background:var(--s2);border:1.5px solid var(--border);
+  border-radius:14px;padding:10px 4px;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  cursor:pointer;transition:all 0.18s;
+}
+.mc.on{background:rgba(61,126,255,0.1);border-color:var(--accent);}
+.mc:active{transform:scale(0.95);}
+.mc-i{font-size:20px;}
+.mc-l{font-size:9px;font-weight:700;letter-spacing:0.5px;color:var(--dim);text-transform:uppercase;}
+.mc.on .mc-l{color:var(--accent);}
+
+/* Go btn */
+#gobtn{
+  width:100%;margin-top:14px;padding:15px;
+  background:linear-gradient(135deg,#3d7eff,#00dfa2);
+  border:none;border-radius:16px;
+  color:#000;font-family:'Syne',sans-serif;font-size:14px;font-weight:800;
+  cursor:pointer;letter-spacing:0.5px;
+  box-shadow:0 8px 30px rgba(61,126,255,0.3);
+  display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s;
+}
+#gobtn:active{transform:scale(0.98);}
+#gobtn:disabled{opacity:0.4;}
+
+/* Route preview */
+#rp{display:none;margin-top:14px;}
+#rp.show{display:block;}
+.rp-card{
+  background:var(--s2);border-radius:16px;padding:14px 16px;
+  display:flex;align-items:center;gap:12px;margin-bottom:10px;
+}
+.rp-s{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.rp-v{font-size:20px;font-weight:800;}
+.rp-l{font-size:9px;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;font-family:'DM Mono',monospace;}
+.rp-div{width:1px;height:34px;background:var(--border);}
+.rp-badge{margin-left:auto;padding:5px 12px;border-radius:20px;background:rgba(61,126,255,0.1);border:1px solid rgba(61,126,255,0.25);color:var(--accent);font-size:14px;}
+.start-btn{
+  width:100%;padding:15px;
+  background:linear-gradient(135deg,#00dfa2,#3d7eff);
+  border:none;border-radius:16px;
+  color:#000;font-family:'Syne',sans-serif;font-size:14px;font-weight:800;
+  cursor:pointer;letter-spacing:0.5px;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 8px 28px rgba(0,223,162,0.25);transition:all 0.2s;
+}
+.start-btn:active{transform:scale(0.98);}
+
+/* Steps sheet */
+#ssht{position:fixed;inset:0;z-index:900;display:none;align-items:flex-end;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);}
+#ssht.open{display:flex;}
+.ss-in{width:100%;background:var(--s1);border-radius:26px 26px 0 0;max-height:78vh;overflow:hidden;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0);animation:sup .3s cubic-bezier(.4,0,.2,1);}
+@keyframes sup{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.ss-h{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.ss-title{font-size:15px;font-weight:800;}
+.ss-close{background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;}
+#ss-list{overflow-y:auto;flex:1;padding:6px 0;}
+#ss-list::-webkit-scrollbar{width:0;}
+.srow{padding:11px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.1s;}
+.srow:active{background:rgba(61,126,255,0.08);}
+.srow.cur{background:rgba(61,126,255,0.08);border-left:3px solid var(--accent);}
+.srow-n{width:22px;height:22px;border-radius:50%;background:rgba(61,126,255,0.1);border:1px solid rgba(61,126,255,0.25);display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:9px;color:var(--accent);flex-shrink:0;}
+.srow-i{font-size:18px;flex-shrink:0;}
+.srow-b{flex:1;}
+.srow-t{font-size:13px;font-weight:600;line-height:1.3;}
+.srow-d{font-size:11px;color:var(--dim);margin-top:2px;font-family:'DM Mono',monospace;}
+.srow-d b{color:var(--accent2);}
+
+/* Layer sheet */
+#lsht{position:fixed;inset:0;z-index:900;display:none;align-items:flex-end;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);}
+#lsht.open{display:flex;}
+.ls-in{width:100%;background:var(--s1);border-radius:26px 26px 0 0;padding:20px 20px env(safe-area-inset-bottom,20px);animation:sup .3s cubic-bezier(.4,0,.2,1);}
+.ls-title{font-size:15px;font-weight:800;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;}
+.ls-close{background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;}
+.ls-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.lc{background:var(--s2);border:1.5px solid var(--border);border-radius:14px;padding:13px 8px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;}
+.lc.on{border-color:var(--accent);background:rgba(61,126,255,0.08);}
+.lc:active{transform:scale(0.96);}
+.lc-i{font-size:22px;}
+.lc-n{font-size:11px;font-weight:700;}
+.lc-a{font-size:9px;color:var(--dim);font-family:'DM Mono',monospace;}
+.lc-a.live{color:var(--accent2);}
+.lc-a.h24{color:var(--accent);}
+
+/* Toast */
+#toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(16,19,26,0.97);border:1px solid rgba(61,126,255,0.2);color:var(--text);padding:12px 24px;border-radius:30px;font-size:13px;font-weight:600;z-index:9999;pointer-events:none;opacity:0;transition:opacity 0.3s;white-space:nowrap;backdrop-filter:blur(20px);box-shadow:0 8px 32px rgba(0,0,0,0.6);}
+#toast.show{opacity:1;}
+
+/* Loader */
+#loader{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;}
+.ld-logo{font-size:30px;font-weight:800;letter-spacing:5px;background:linear-gradient(135deg,#3d7eff,#00dfa2);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.ld-bar{width:160px;height:2px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;}
+.ld-fill{height:100%;background:linear-gradient(90deg,#3d7eff,#00dfa2);border-radius:2px;animation:ldf 1.4s ease-in-out infinite;}
+@keyframes ldf{0%{width:0;opacity:1}70%{width:100%;opacity:1}100%{width:100%;opacity:0}}
+.ld-sub{font-family:'DM Mono',monospace;font-size:10px;color:var(--dim);letter-spacing:2px;}
+
+/* Leaflet */
+.leaflet-control-zoom,.leaflet-control-attribution{display:none!important;}
+.leaflet-popup-content-wrapper{background:var(--s1)!important;border:1px solid var(--border)!important;border-radius:14px!important;color:var(--text)!important;box-shadow:0 8px 32px rgba(0,0,0,0.6)!important;}
+.leaflet-popup-tip{background:var(--s1)!important;}
+.leaflet-popup-content{font-family:'Syne',sans-serif!important;font-size:13px!important;margin:12px 16px!important;}
+</style>
+</head>
+<body>
+
+<div id="loader"><div class="ld-logo">NAVIX</div><div class="ld-bar"><div class="ld-fill"></div></div><div class="ld-sub">INICIANDO</div></div>
+<div id="toast"></div>
+<div id="map"></div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="logo">NAVIX</div>
+  <div id="clock">—</div>
+</div>
+
+<!-- TOP NAV BANNER -->
+<div id="nav-top">
+  <div class="nt-card">
+    <div class="nt-ico" id="nt-ico">⬆</div>
+    <div class="nt-t">
+      <div class="nt-dist" id="nt-dist">—</div>
+      <div class="nt-act" id="nt-act">—</div>
+      <div class="nt-nxt" id="nt-nxt"></div>
+    </div>
+  </div>
+</div>
+
+<!-- REROUTE BANNER -->
+<div id="reroute-banner">
+  <span>🔄</span> Recalculando ruta...
+</div>
+
+<!-- PILL -->
+<div id="pill" onclick="openModal()">
+  <div class="pill-ico">🧭</div>
+  <div class="pill-txt">
+    <div class="pill-main">¿A dónde vas?</div>
+    <div class="pill-sub" id="pill-sub">Toca para navegar</div>
+  </div>
+  <div class="pill-chev">›</div>
+</div>
+
+<!-- SIDE CONTROLS -->
+<div id="side-ctrl">
+  <button class="sctl" onclick="openLayers()">🗺</button>
+  <button class="sctl lit" id="voice-btn" onclick="toggleVoice()">🔊</button>
+  <button class="sctl" id="steps-btn" style="display:none" onclick="openSteps()">📋</button>
+</div>
+
+<!-- LOCK / CENTER BTN -->
+<button id="lock-btn" onclick="toggleLock()">📍</button>
+
+<!-- SPEED -->
+<div id="spd"><div id="spd-v">0</div><div id="spd-u">km/h</div></div>
+
+<!-- BOTTOM NAV BAR -->
+<div id="navbar">
+  <div class="nb-top">
+    <div class="nb-ico" id="nb-ico">⬆</div>
+    <div class="nb-txt">
+      <div class="nb-action" id="nb-act">—</div>
+      <div class="nb-street" id="nb-str">—</div>
+    </div>
+    <div class="nb-dist" id="nb-nd">—</div>
+  </div>
+  <div class="nb-bot">
+    <div class="nb-stats">
+      <div class="nb-stat"><div class="nb-sv" id="nb-rem">—</div><div class="nb-sl">resta</div></div>
+      <div class="nb-stat"><div class="nb-sv" id="nb-time">—</div><div class="nb-sl">tiempo</div></div>
+      <div class="nb-stat"><div class="nb-sv" id="nb-arr">—</div><div class="nb-sl">llegada</div></div>
+    </div>
+    <button class="nb-voice on" id="nb-voice" onclick="toggleVoice()">🔊</button>
+    <button class="nb-end" onclick="stopNav()">■ Fin</button>
+  </div>
+</div>
+
+<!-- NAV MODAL -->
+<div id="nav-modal">
+  <div class="modal-bg" onclick="closeModal()"></div>
+  <div class="modal-sheet">
+    <div class="sh-handle"></div>
+    <div class="sh-head">
+      <span class="sh-title">🧭 Navegación</span>
+      <button class="sh-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="sh-body">
+      <div class="fw">
+        <div class="frow">
+          <span class="fdot fdot-o"></span>
+          <input class="fi" id="oi" type="text" placeholder="Origen — ¿desde dónde?" autocomplete="off">
+          <button class="fbtn" onclick="locFor('o')">📍</button>
+          <button class="fbtn" id="ocl" onclick="clrF('o')" style="display:none">✕</button>
+        </div>
+        <div class="aclist" id="oac"></div>
+      </div>
+      <div class="swap-row">
+        <div class="swap-line"></div>
+        <button class="swap-btn" onclick="swapIO()">⇅ intercambiar</button>
+        <div class="swap-line"></div>
+      </div>
+      <div class="fw">
+        <div class="frow">
+          <span class="fdot fdot-d"></span>
+          <input class="fi" id="di" type="text" placeholder="Destino — ¿a dónde?" autocomplete="off">
+          <button class="fbtn" id="dcl" onclick="clrF('d')" style="display:none">✕</button>
+        </div>
+        <div class="aclist" id="dac"></div>
+      </div>
+      <div class="modes">
+        <div class="mc on" id="m-car"  onclick="setMode('car',this)"> <span class="mc-i">🚗</span><span class="mc-l">Carro</span></div>
+        <div class="mc"    id="m-moto" onclick="setMode('moto',this)"><span class="mc-i">🏍</span><span class="mc-l">Moto</span></div>
+        <div class="mc"    id="m-bike" onclick="setMode('bike',this)"><span class="mc-i">🚴</span><span class="mc-l">Bici</span></div>
+        <div class="mc"    id="m-walk" onclick="setMode('walk',this)"><span class="mc-i">🚶</span><span class="mc-l">A pie</span></div>
+      </div>
+      <button id="gobtn" onclick="calcRoute()"><span>🗺</span> Calcular ruta</button>
+      <div id="rp">
+        <div class="rp-card">
+          <div class="rp-s"><div class="rp-v" id="rp-d">—</div><div class="rp-l">km</div></div>
+          <div class="rp-div"></div>
+          <div class="rp-s"><div class="rp-v" id="rp-t">—</div><div class="rp-l">min est.</div></div>
+          <div class="rp-div"></div>
+          <div class="rp-s"><div class="rp-v" id="rp-a">—</div><div class="rp-l">llegada</div></div>
+          <div class="rp-badge" id="rp-b">🚗</div>
+        </div>
+        <button class="start-btn" onclick="startNav()"><span>🧭</span> Iniciar navegación</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STEPS SHEET -->
+<div id="ssht" onclick="closeSteps()">
+  <div class="ss-in" onclick="e=>e.stopPropagation()">
+    <div class="ss-h"><span class="ss-title">Instrucciones</span><button class="ss-close" onclick="closeSteps()">✕</button></div>
+    <div id="ss-list"></div>
+  </div>
+</div>
+
+<!-- LAYER SHEET -->
+<div id="lsht" onclick="closeLayers()">
+  <div class="ls-in" onclick="e=>e.stopPropagation()">
+    <div class="ls-title">Capas del mapa<button class="ls-close" onclick="closeLayers()">✕</button></div>
+    <div class="ls-grid">
+      <div class="lc on" id="lc-h"  onclick="setBase('hybrid',this)"> <span class="lc-i">🌍</span><span class="lc-n">Híbrido</span><span class="lc-a">Sat + calles</span></div>
+      <div class="lc"    id="lc-e"  onclick="setBase('esri',this)">   <span class="lc-i">🛰</span><span class="lc-n">Satélite</span><span class="lc-a">Alta res</span></div>
+      <div class="lc"    id="lc-n"  onclick="setBase('nasa',this)">   <span class="lc-i">🌤</span><span class="lc-n">NASA</span><span class="lc-a h24">≤ 24h</span></div>
+      <div class="lc"    id="lc-g"  onclick="setBase('goes',this)">   <span class="lc-i">⚡</span><span class="lc-n">GOES</span><span class="lc-a live">~10 min</span></div>
+      <div class="lc"    id="lc-ni" onclick="setBase('night',this)">  <span class="lc-i">🌙</span><span class="lc-n">Nocturno</span><span class="lc-a">Semanal</span></div>
+      <div class="lc"    id="lc-s"  onclick="setBase('street',this)"> <span class="lc-i">🗺</span><span class="lc-n">Calles</span><span class="lc-a">OSM</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STADIA='940fdc2a-43f7-4fe7-bcec-86fa2eb7dab7';
+const MCONF={car:{osrm:'driving',kmh:40,e:'🚗'},moto:{osrm:'driving',kmh:55,e:'🏍'},bike:{osrm:'cycling',kmh:15,e:'🚴'},walk:{osrm:'foot',kmh:5,e:'🚶'}};
+
+// ── STATE ──
+let myPos=null,oCoords=null,dCoords=null,mode='car';
+let steps=[],curStep=0,routeLine=null;
+let oMk=null,dMk=null,myMk=null;
+let navOn=false,voiceOn=true,locked=false,watchId=null;
+let mapHeading=0,targetHeading=0,headingAnim=null;
+let rerouteTimer=null,rerouteCount=0;
+let offRouteDetected=false;
+const acT={};
+
+// ── MAP ──
+const map=L.map('map',{center:[10.96,-74.8],zoom:15,zoomControl:false,attributionControl:false,tap:true,rotate:false});
+map.on('movestart',()=>{if(locked&&navOn)setLocked(false);});
+
+function dAgo(n){const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().split('T')[0];}
+const D1=dAgo(1),D3=dAgo(3);
+
+const stadia=L.tileLayer(`https://tiles.stadiamaps.com/tiles/stamen_toner_hybrid/{z}/{x}/{y}{r}.png?api_key=${STADIA}`,{maxZoom:20,opacity:0.9,zIndex:500});
+stadia.addTo(map);
+
+const BASES={
+  hybrid:()=>L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,zIndex:100}),
+  esri:  ()=>L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,zIndex:100}),
+  nasa:  ()=>L.tileLayer(`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${D1}/GoogleMapsCompatible/{z}/{y}/{x}.jpg`,{maxZoom:9,maxNativeZoom:9,zIndex:100}),
+  goes:  ()=>L.tileLayer(`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_Band2_Red_Visible_1km/default/${D1}/GoogleMapsCompatible/{z}/{y}/{x}.png`,{maxZoom:7,maxNativeZoom:7,zIndex:100}),
+  night: ()=>L.tileLayer(`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_DayNightBand_ENCC/default/${D3}/GoogleMapsCompatible/{z}/{y}/{x}.png`,{maxZoom:8,maxNativeZoom:8,zIndex:100}),
+  street:()=>L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,zIndex:100})
+};
+let baseLayer=null;
+function setBase(key,btn){
+  if(baseLayer)map.removeLayer(baseLayer);
+  baseLayer=BASES[key]();baseLayer.addTo(map);
+  if(key!=='street')stadia.bringToFront();
+  else try{map.removeLayer(stadia);}catch(e){}
+  document.querySelectorAll('.lc').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');closeLayers();
+}
+setBase('hybrid',document.getElementById('lc-h'));
+
+// MAP CLICK — quick dest
+map.on('click',e=>{
+  if(navOn)return;
+  dCoords={lat:e.latlng.lat,lon:e.latlng.lng};
+  placeWp('d',dCoords.lat,dCoords.lon);
+  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${dCoords.lat}&lon=${dCoords.lon}&format=json`)
+    .then(r=>r.json()).then(d=>{
+      const n=d.address?.road||d.address?.neighbourhood||d.address?.city||`${dCoords.lat.toFixed(4)},${dCoords.lon.toFixed(4)}`;
+      document.getElementById('di').value=n;
+      document.getElementById('dcl').style.display='flex';
+      document.getElementById('pill-sub').textContent=n;
+    }).catch(()=>{});
+  openModal();
+});
+
+// ── MODAL ──
+function openModal(){document.getElementById('nav-modal').classList.add('open');document.getElementById('pill').classList.add('gone');setTimeout(()=>document.getElementById('di').focus(),400);}
+function closeModal(){document.getElementById('nav-modal').classList.remove('open');document.getElementById('pill').classList.remove('gone');document.querySelectorAll('.aclist').forEach(a=>a.classList.remove('open'));}
+
+// ── LAYERS / STEPS ──
+function openLayers(){document.getElementById('lsht').classList.add('open');}
+function closeLayers(){document.getElementById('lsht').classList.remove('open');}
+function openSteps(){if(steps.length){buildSteps();document.getElementById('ssht').classList.add('open');}}
+function closeSteps(){document.getElementById('ssht').classList.remove('open');}
+
+// ── AUTOCOMPLETE ──
+function setupAC(inpId,acId,which){
+  const inp=document.getElementById(inpId),ac=document.getElementById(acId);
+  let idx=-1;
+  inp.addEventListener('input',()=>{
+    const v=inp.value.trim();
+    document.getElementById(inpId[0]+'cl').style.display=v?'flex':'none';
+    if(v.length<2){ac.classList.remove('open');return;}
+    clearTimeout(acT[inpId]);
+    acT[inpId]=setTimeout(()=>doAC(v,ac,inp,which),280);
+  });
+  inp.addEventListener('keydown',e=>{
+    const items=ac.querySelectorAll('.acitem');
+    if(e.key==='ArrowDown'){idx=Math.min(idx+1,items.length-1);hiAC(items,idx);e.preventDefault();}
+    else if(e.key==='ArrowUp'){idx=Math.max(0,idx-1);hiAC(items,idx);e.preventDefault();}
+    else if(e.key==='Enter'&&idx>=0)items[idx]?.click();
+    else if(e.key==='Escape')ac.classList.remove('open');
+    else idx=-1;
+  });
+  ['touchstart','click'].forEach(ev=>document.addEventListener(ev,e=>{if(!inp.contains(e.target)&&!ac.contains(e.target))ac.classList.remove('open');}));
+}
+function hiAC(items,idx){items.forEach((it,i)=>it.classList.toggle('sel',i===idx));}
+
+async function doAC(q,ac,inp,which){
+  try{
+    let vb='';
+    if(myPos){const d=1.2;vb=`&viewbox=${myPos.lon-d},${myPos.lat-d},${myPos.lon+d},${myPos.lat+d}&bounded=0`;}
+    const data=await(await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=8&addressdetails=1&accept-language=es${vb}`)).json();
+    ac.innerHTML='';
+    if(!data.length){ac.classList.remove('open');return;}
+    data.forEach(item=>{
+      const div=document.createElement('div');div.className='acitem';
+      const name=item.address?.road||item.address?.neighbourhood||item.address?.suburb||item.display_name.split(',')[0];
+      const sub=item.display_name.split(',').slice(1,3).join(',').trim();
+      const dist=myPos?`<span class="acd">${fmtD(hav(myPos.lat,myPos.lon,+item.lat,+item.lon))}</span>`:'';
+      div.innerHTML=`<span class="aci">${pIco(item.type,item.class)}</span><div class="act"><div class="acn">${name}</div><div class="acs">${sub}</div></div>${dist}`;
+      div.onclick=()=>{
+        const fn=name+(sub?', '+sub:'');
+        inp.value=fn;
+        document.getElementById(inp.id[0]+'cl').style.display='flex';
+        ac.classList.remove('open');
+        const c={lat:+item.lat,lon:+item.lon};
+        if(which==='o'){oCoords=c;placeWp('o',c.lat,c.lon);}
+        else{dCoords=c;placeWp('d',c.lat,c.lon);document.getElementById('pill-sub').textContent=fn;}
+        map.flyTo([c.lat,c.lon],16,{duration:1.1});inp.blur();
+      };
+      ac.appendChild(div);
+    });
+    ac.classList.add('open');
+  }catch(e){}
+}
+function pIco(t,c){const m={'restaurant':'🍽','fast_food':'🍔','cafe':'☕','hospital':'🏥','pharmacy':'💊','school':'🏫','hotel':'🏨','supermarket':'🛒','bank':'🏦','fuel':'⛽','park':'🌳','airport':'✈','bus_stop':'🚌','cinema':'🎬','museum':'🏛'};if(m[t])return m[t];if(c==='highway')return'🛣';if(c==='amenity')return'📍';if(c==='building')return'🏢';return'📌';}
+function clrF(w){document.getElementById(w==='o'?'oi':'di').value='';document.getElementById(w+'cl').style.display='none';if(w==='o'){oCoords=null;if(oMk){map.removeLayer(oMk);oMk=null;}}else{dCoords=null;if(dMk){map.removeLayer(dMk);dMk=null;}}}
+function swapIO(){const ov=document.getElementById('oi').value,dv=document.getElementById('di').value;document.getElementById('oi').value=dv;document.getElementById('di').value=ov;document.getElementById('ocl').style.display=dv?'flex':'none';document.getElementById('dcl').style.display=ov?'flex':'none';const tmp=oCoords;oCoords=dCoords;dCoords=tmp;if(oCoords)placeWp('o',oCoords.lat,oCoords.lon);if(dCoords)placeWp('d',dCoords.lat,dCoords.lon);}
+function setMode(m,el){mode=m;document.querySelectorAll('.mc').forEach(b=>b.classList.remove('on'));el.classList.add('on');}
+
+// ── LOCATE ──
+function locFor(which){
+  if(!navigator.geolocation)return showToast('GPS no disponible');
+  navigator.geolocation.getCurrentPosition(p=>{
+    const la=p.coords.latitude,lo=p.coords.longitude;
+    myPos={lat:la,lon:lo,heading:p.coords.heading,speed:p.coords.speed};
+    drawMyMk(la,lo,p.coords.heading||0);
+    if(which==='o'){
+      oCoords={lat:la,lon:lo};placeWp('o',la,lo);
+      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${la}&lon=${lo}&format=json`)
+        .then(r=>r.json()).then(d=>{const n=d.address?.road||d.address?.neighbourhood||d.address?.city||'Mi ubicación';document.getElementById('oi').value=n;document.getElementById('ocl').style.display='flex';})
+        .catch(()=>{document.getElementById('oi').value='Mi ubicación';document.getElementById('ocl').style.display='flex';});
+    }
+    map.flyTo([la,lo],16,{duration:1.3});
+  },()=>showToast('Activa el GPS en tu dispositivo'),{enableHighAccuracy:true,timeout:10000});
+}
+
+// ── PREMIUM SVG ARROW MARKER ──
+function arrowSVG(heading){
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" style="transform:rotate(${heading}deg);transition:transform 0.5s cubic-bezier(.4,0,.2,1);filter:drop-shadow(0 0 10px rgba(61,126,255,0.9)) drop-shadow(0 2px 6px rgba(0,0,0,0.8))">
+    <defs>
+      <radialGradient id="ag" cx="50%" cy="35%" r="65%">
+        <stop offset="0%" stop-color="#7ab8ff"/>
+        <stop offset="60%" stop-color="#3d7eff"/>
+        <stop offset="100%" stop-color="#1a4fcc"/>
+      </radialGradient>
+      <radialGradient id="ag2" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="rgba(255,255,255,0.3)"/>
+        <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+      </radialGradient>
+    </defs>
+    <!-- Shadow circle -->
+    <circle cx="24" cy="26" r="14" fill="rgba(0,0,0,0.4)" blur="4"/>
+    <!-- Main body -->
+    <circle cx="24" cy="24" r="15" fill="url(#ag)" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+    <!-- Shine overlay -->
+    <circle cx="24" cy="24" r="15" fill="url(#ag2)"/>
+    <!-- Arrow shape -->
+    <path d="M24 9 L31 31 L24 27 L17 31 Z" fill="white" opacity="0.95"/>
+    <!-- Center dot -->
+    <circle cx="24" cy="24" r="3" fill="rgba(255,255,255,0.6)"/>
+    <!-- Outer ring -->
+    <circle cx="24" cy="24" r="15" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  </svg>`;
+}
+
+function drawMyMk(lat,lon,heading){
+  if(myMk)map.removeLayer(myMk);
+  const svg=arrowSVG(heading);
+  myMk=L.marker([lat,lon],{
+    icon:L.divIcon({className:'nav-arrow-marker',html:svg,iconSize:[48,48],iconAnchor:[24,24]}),
+    zIndexOffset:2000
+  }).addTo(map);
+}
+
+function placeWp(which,lat,lon){
+  if(which==='o'){if(oMk)map.removeLayer(oMk);oMk=L.marker([lat,lon],{icon:L.divIcon({className:'',html:'<div style="width:12px;height:12px;border-radius:50%;background:#00dfa2;border:2px solid #fff;box-shadow:0 0 10px #00dfa2"></div>',iconSize:[12,12],iconAnchor:[6,6]})}).addTo(map);}
+  else{if(dMk)map.removeLayer(dMk);dMk=L.marker([lat,lon],{icon:L.divIcon({className:'',html:'<svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40"><defs><radialGradient id="pg" cx="50%" cy="30%" r="70%"><stop offset="0%" stop-color="#ff6680"/><stop offset="100%" stop-color="#ff3355"/></radialGradient></defs><path d="M16 0 C7.2 0 0 7.2 0 16 C0 28 16 40 16 40 C16 40 32 28 32 16 C32 7.2 24.8 0 16 0Z" fill="url(#pg)" filter="drop-shadow(0 3px 8px rgba(255,51,85,0.6))"/><circle cx="16" cy="16" r="6" fill="white" opacity="0.9"/></svg>',iconSize:[32,40],iconAnchor:[16,40]})}).addTo(map);}
+}
+
+// ── LOCK / CENTER ──
+function setLocked(val){
+  locked=val;
+  document.getElementById('lock-btn').classList.toggle('locked',locked);
+  document.getElementById('lock-btn').textContent=locked?'🔒':'📍';
+}
+function toggleLock(){
+  if(!myPos){locFor('center');return;}
+  setLocked(!locked);
+  if(locked&&myPos){
+    const zoom=navOn?18:16;
+    map.flyTo([myPos.lat,myPos.lon],zoom,{duration:0.8});
+  }
+}
+
+// ── CALC ROUTE ──
+async function calcRoute(){
+  if(!oCoords||!dCoords){showToast('Ingresa origen y destino');return;}
+  const btn=document.getElementById('gobtn');
+  btn.innerHTML='<span>⏳</span> Calculando...';btn.disabled=true;
+  try{
+    await fetchRoute(oCoords,dCoords,false);
+    const distKm=(getTotalDist()/1000).toFixed(1);
+    const estMin=Math.round((getTotalDist()/1000)/MCONF[mode].kmh*60);
+    const arr=new Date(Date.now()+estMin*60000);
+    const aH=String(arr.getHours()).padStart(2,'0'),aM=String(arr.getMinutes()).padStart(2,'0');
+    document.getElementById('rp-d').textContent=distKm;
+    document.getElementById('rp-t').textContent=estMin;
+    document.getElementById('rp-a').textContent=aH+':'+aM;
+    document.getElementById('rp-b').textContent=MCONF[mode].e;
+    document.getElementById('rp').classList.add('show');
+    document.getElementById('steps-btn').style.display='flex';
+    showToast('¡Ruta lista!');
+  }catch(e){showToast('Error al calcular ruta');}
+  finally{btn.innerHTML='<span>🗺</span> Calcular ruta';btn.disabled=false;}
+}
+
+function getTotalDist(){return steps.reduce((s,st)=>s+st.distance,0);}
+
+async function fetchRoute(from,to,isReroute){
+  const url=`https://router.project-osrm.org/route/v1/${MCONF[mode].osrm}/${from.lon},${from.lat};${to.lon},${to.lat}?steps=true&geometries=geojson&overview=full`;
+  const data=await(await fetch(url)).json();
+  if(!data.routes?.length)throw new Error('No route');
+  const route=data.routes[0];
+  if(routeLine)map.removeLayer(routeLine);
+  const coords=route.geometry.coordinates.map(c=>[c[1],c[0]]);
+  routeLine=L.polyline(coords,{color:'#3d7eff',weight:6,opacity:0.9,dashArray:mode==='walk'?'10,8':null,lineCap:'round',lineJoin:'round'}).addTo(map);
+  if(!isReroute)map.fitBounds(routeLine.getBounds(),{padding:[60,60],maxZoom:17});
+  steps=[];
+  route.legs[0].steps.forEach(st=>{
+    if(st.distance<5&&st.maneuver?.type!=='arrive')return;
+    steps.push({type:st.maneuver?.type,modifier:st.maneuver?.modifier,name:st.name||'',distance:st.distance,coords:st.geometry?.coordinates?.[0]});
+  });
+  if(isReroute){curStep=0;updateNavUI();}
+}
+
+// ── START NAV ──
+function startNav(){
+  if(!steps.length)return;
+  navOn=true;curStep=0;voiceOn=true;
+  closeModal();
+  document.getElementById('pill').classList.add('gone');
+  document.body.classList.add('nav-active');
+  document.getElementById('navbar').classList.add('on');
+  document.getElementById('nav-top').classList.add('on');
+  document.getElementById('spd').classList.add('show');
+  document.getElementById('nb-voice').classList.add('on');
+  document.getElementById('voice-btn').classList.add('lit');
+  setLocked(true);
+  if(watchId)navigator.geolocation.clearWatch(watchId);
+  watchId=navigator.geolocation.watchPosition(onGPS,()=>{},{enableHighAccuracy:true,maximumAge:500,timeout:8000});
+  updateNavUI();
+  speak(mvrPlain(steps[0].type,steps[0].modifier,steps[0].name));
+  showToast('Navegación iniciada 🧭');
+}
+
+// ── GPS UPDATE ──
+function onGPS(pos){
+  const lat=pos.coords.latitude,lon=pos.coords.longitude;
+  const spd=pos.coords.speed||0,hdg=pos.coords.heading;
+  myPos={lat,lon,heading:hdg,speed:spd};
+
+  // Update arrow marker with heading
+  const heading=(hdg!==null&&!isNaN(hdg))?hdg:0;
+  drawMyMk(lat,lon,heading);
+
+  // Speed display
+  const kph=Math.round(spd*3.6);
+  document.getElementById('spd-v').textContent=kph;
+  const maxSpd=mode==='walk'?10:mode==='bike'?40:mode==='moto'?120:100;
+  document.getElementById('spd').classList.toggle('speeding',kph>maxSpd);
+
+  // Locked: rotate map to heading + center
+  if(locked&&navOn){
+    const zoom=map.getZoom()<17?17:map.getZoom();
+    map.flyTo([lat,lon],zoom,{animate:true,duration:0.4,noMoveStart:true});
+  }
+
+  if(!navOn||!steps.length)return;
+
+  const step=steps[curStep];
+  let d2next=Infinity;
+  if(step?.coords)d2next=hav(lat,lon,step.coords[1],step.coords[0])*1000;
+  else if(step)d2next=step.distance;
+
+  // ── OFF-ROUTE DETECTION ──
+  // Check distance to route line (simplified: distance to next step coord)
+  const offThresh=mode==='walk'?80:mode==='bike'?120:200;
+  if(d2next>offThresh*3&&curStep<steps.length-2&&!offRouteDetected){
+    offRouteDetected=true;
+    clearTimeout(rerouteTimer);
+    rerouteTimer=setTimeout(()=>doReroute(lat,lon),3000);
+    showRerouteBanner();
+  } else if(d2next<offThresh){
+    offRouteDetected=false;
+    hideRerouteBanner();
+  }
+
+  // Advance step
+  const thresh=mode==='walk'?15:mode==='bike'?20:30;
+  if(d2next<thresh&&curStep<steps.length-1){
+    curStep++;offRouteDetected=false;hideRerouteBanner();
+    updateNavUI();
+    const ns=steps[curStep];
+    const prev=steps[curStep-1]?.distance||0;
+    const msg=mvrPlain(ns.type,ns.modifier,ns.name);
+    // Pre-announce upcoming turn
+    if(prev>300)setTimeout(()=>speak(`En ${Math.round(prev)} metros, ${msg}`),500);
+    else speak(msg);
+    document.querySelectorAll('.srow').forEach((r,i)=>r.classList.toggle('cur',i===curStep));
+    if(ns.type==='arrive')setTimeout(()=>{speak('Has llegado a tu destino');setTimeout(stopNav,3500);},600);
+  }
+
+  // Update distance to next in UI
+  document.getElementById('nt-dist').textContent=fmtD(d2next/1000);
+  document.getElementById('nb-nd').textContent=fmtD(d2next/1000);
+
+  // Remaining
+  let rem=0;for(let i=curStep;i<steps.length;i++)rem+=steps[i].distance;
+  const remMin=Math.round(rem/1000/MCONF[mode].kmh*60);
+  const at=new Date(Date.now()+remMin*60000);
+  const aH=String(at.getHours()).padStart(2,'0'),aM=String(at.getMinutes()).padStart(2,'0');
+  document.getElementById('nb-rem').textContent=fmtD(rem/1000);
+  document.getElementById('nb-time').textContent=fmtT(remMin);
+  document.getElementById('nb-arr').textContent=aH+':'+aM;
+}
+
+function updateNavUI(){
+  if(!steps[curStep])return;
+  const s=steps[curStep];
+  const ico=mvrIco(s.type,s.modifier);
+  const act=mvrTxt(s.type,s.modifier,s.name);
+  document.getElementById('nb-ico').textContent=ico;
+  document.getElementById('nb-act').innerHTML=act;
+  document.getElementById('nb-str').textContent=s.name;
+  document.getElementById('nt-ico').textContent=ico;
+  document.getElementById('nt-act').textContent=mvrPlain(s.type,s.modifier,s.name);
+  const ns=steps[curStep+1];
+  document.getElementById('nt-nxt').textContent=ns?`Luego: ${mvrPlain(ns.type,ns.modifier,ns.name)}`:'';
+}
+
+// ── REROUTE ──
+function showRerouteBanner(){document.getElementById('reroute-banner').classList.add('show');}
+function hideRerouteBanner(){document.getElementById('reroute-banner').classList.remove('show');}
+
+async function doReroute(lat,lon){
+  if(!dCoords)return;
+  hideRerouteBanner();
+  showToast('🔄 Recalculando ruta...');
+  speak('Recalculando ruta');
+  try{
+    await fetchRoute({lat,lon},dCoords,true);
+    rerouteCount++;
+    offRouteDetected=false;
+    showToast('✅ Nueva ruta calculada');
+  }catch(e){showToast('Error al recalcular');}
+}
+
+// ── STOP NAV ──
+function stopNav(){
+  navOn=false;
+  if(watchId){navigator.geolocation.clearWatch(watchId);watchId=null;}
+  clearTimeout(rerouteTimer);
+  hideRerouteBanner();
+  document.body.classList.remove('nav-active');
+  document.getElementById('navbar').classList.remove('on');
+  document.getElementById('nav-top').classList.remove('on');
+  document.getElementById('spd').classList.remove('show');
+  document.getElementById('pill').classList.remove('gone');
+  document.getElementById('voice-btn').classList.remove('lit');
+  setLocked(false);
+  showToast('Navegación finalizada');
+}
+
+// ── VOICE ──
+function speak(txt){
+  if(!voiceOn||!window.speechSynthesis)return;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(txt);
+  u.lang='es-ES';u.rate=1.0;u.pitch=1;u.volume=1;
+  const voices=speechSynthesis.getVoices();
+  const esp=voices.find(v=>v.lang.startsWith('es'));
+  if(esp)u.voice=esp;
+  speechSynthesis.speak(u);
+}
+function toggleVoice(){
+  voiceOn=!voiceOn;
+  if(!voiceOn)speechSynthesis.cancel?.();
+  document.getElementById('voice-btn').classList.toggle('lit',voiceOn);
+  document.getElementById('nb-voice').classList.toggle('on',voiceOn);
+  showToast(voiceOn?'Voz activada 🔊':'Voz desactivada 🔇');
+}
+
+// ── STEPS LIST ──
+function buildSteps(){
+  const sl=document.getElementById('ss-list');sl.innerHTML='';
+  steps.forEach((s,i)=>{
+    const div=document.createElement('div');div.className='srow'+(i===curStep?' cur':'');
+    const dist=s.distance>1000?(s.distance/1000).toFixed(1)+' km':Math.round(s.distance)+' m';
+    div.innerHTML=`<div class="srow-n">${i+1}</div><span class="srow-i">${mvrIco(s.type,s.modifier)}</span><div class="srow-b"><div class="srow-t">${mvrTxt(s.type,s.modifier,s.name)}</div><div class="srow-d"><b>${dist}</b></div></div>`;
+    if(s.coords)div.onclick=()=>{map.flyTo([s.coords[1],s.coords[0]],18,{duration:0.6});closeSteps();};
+    sl.appendChild(div);
+  });
+}
+
+// ── MANEUVER ──
+function mvrIco(t,m){if(t==='depart')return'🚀';if(t==='arrive')return'🏁';if(t==='roundabout'||t==='rotary')return'🔄';if(t==='turn'||t==='new name'){if(m==='left'||m==='sharp left')return'↰';if(m==='right'||m==='sharp right')return'↱';if(m==='slight left')return'↖';if(m==='slight right')return'↗';if(m==='uturn')return'↩';}if(t==='fork'){if(m==='left')return'↰';if(m==='right')return'↱';}if(t==='merge')return'🔀';return'⬆';}
+function mvrTxt(t,m,n){const st=n?` por <b style="color:#00dfa2">${n}</b>`:'';if(t==='depart')return`Comienza${st}`;if(t==='arrive')return`<b style="color:#00dfa2">¡Llegaste! 🏁</b>`;if(t==='roundabout'||t==='rotary')return`Toma la rotonda${st}`;if(t==='turn'||t==='new name'){if(m==='left'||m==='sharp left')return`Gira a la <b style="color:#3d7eff">izquierda</b>${st}`;if(m==='right'||m==='sharp right')return`Gira a la <b style="color:#3d7eff">derecha</b>${st}`;if(m==='slight left')return`Mantente a la izquierda${st}`;if(m==='slight right')return`Mantente a la derecha${st}`;if(m==='uturn')return`Da la vuelta${st}`;}if(t==='fork'){if(m==='left')return`Toma la izquierda${st}`;if(m==='right')return`Toma la derecha${st}`;}return`Continúa${st}`;}
+function mvrPlain(t,m,n){const st=n?` por ${n}`:'';if(t==='depart')return`Comienza${st}`;if(t==='arrive')return`Has llegado a tu destino`;if(t==='roundabout')return`Toma la rotonda${st}`;if(t==='turn'||t==='new name'){if(m==='left'||m==='sharp left')return`Gira a la izquierda${st}`;if(m==='right'||m==='sharp right')return`Gira a la derecha${st}`;if(m==='slight left')return`Mantente a la izquierda${st}`;if(m==='slight right')return`Mantente a la derecha${st}`;if(m==='uturn')return`Da la vuelta${st}`;}return`Continúa${st}`;}
+
+// ── HELPERS ──
+function hav(la1,lo1,la2,lo2){const R=6371,dLa=(la2-la1)*Math.PI/180,dLo=(lo2-lo1)*Math.PI/180;const a=Math.sin(dLa/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+function fmtD(km){if(km<0.05)return Math.round(km*1000)+' m';if(km<1)return(km*1000).toFixed(0)+' m';return km.toFixed(1)+' km';}
+function fmtT(m){if(m<1)return'<1 min';if(m<60)return m+' min';return`${Math.floor(m/60)}h ${m%60}m`;}
+
+let toastT;
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2200);}
+
+// ── CLOCK ──
+function tick(){const n=new Date(),p=x=>String(x).padStart(2,'0');document.getElementById('clock').textContent=`${p(n.getHours())}:${p(n.getMinutes())}`;}
+
+// ── INIT ──
+function init(){
+  tick();setInterval(tick,30000);
+  setupAC('oi','oac','o');
+  setupAC('di','dac','d');
+  if(window.speechSynthesis){speechSynthesis.getVoices();speechSynthesis.addEventListener('voiceschanged',()=>speechSynthesis.getVoices());}
+  const ld=document.getElementById('loader');
+  ld.style.transition='opacity 0.5s';ld.style.opacity='0';
+  setTimeout(()=>ld.style.display='none',500);
+}
+init();
+</script>
+</body>
+</html>
